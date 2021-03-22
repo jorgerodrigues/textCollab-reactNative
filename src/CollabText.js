@@ -15,12 +15,13 @@ import {
   modifyStringAndAddCursors,
   checkPhoneConnectivity,
   receiveUpdatedMessageAndUpdateState,
+  retrieveLocallySavedUpdate,
 } from './Utils/textPreparationSupportFunctions';
 
 const CollabText = () => {
   const socket = io(BACKEND_PROD);
-  const [fullText, setFullText] = useState();
-  const [localText, setLocalText] = useState('');
+  const [fullText, setFullText] = useState(); // fullText holds the latest text, either remote or local
+  const [localText, setLocalText] = useState(''); // holds the latest local text.
   const [cursorPosition, setCursorPosition] = useState(0);
   const [userName, setUserName] = useState();
   const [userList, setUserList] = useState();
@@ -31,6 +32,7 @@ const CollabText = () => {
     isInternetReachable: true,
     type: 'WIFI',
   });
+  //used to uniquely identify which udpate and avoid double update.
   const id = useRef(`${Date.now()}`);
 
   // This useEffect triggers the process of listening for an update from the server
@@ -54,11 +56,30 @@ const CollabText = () => {
   useEffect(() => {
     (async function checkNetwork() {
       const phoneStatus = await checkPhoneConnectivity();
-      console.log(phoneStatus);
       setConnectionStatus(phoneStatus);
     })();
   }, []);
 
+  // Use effect triggered on the update of the connection status
+  // It retrieves the local data and emits.
+  useEffect(() => {
+    (async function retrieveLocalData() {
+      const localData = await retrieveLocallySavedUpdate();
+      console.log(localData);
+    })();
+    try {
+      socket.emit('messageUpdated', {
+        user: localData,
+        msg: localText,
+        idRemote: id.current,
+        cursorPosition: cursorPosition.selection.end,
+      });
+      setFullText(localText);
+    } catch {}
+  }, [connectionStatus]);
+
+  // handles the submission of the simplified text using the socket.
+  // Checks whether it was the text needs emitting and that there is a cursor position.
   const handleTextChange = () => {
     if (localText !== fullText && cursorPosition.selection !== undefined) {
       try {
@@ -70,6 +91,7 @@ const CollabText = () => {
         });
         setFullText(localText);
       } catch (e) {
+        console.log('Failling emitting');
         receiveUpdatedMessageAndUpdateState(localText, {
           name: userName,
           position: cursorPosition.selection.end,
@@ -78,6 +100,7 @@ const CollabText = () => {
     }
   };
 
+  // Listener function to get the 'textUpdated' event and update all associated states.
   const receiveUpdatedTextInfo = () => {
     socket.on('textUpdated', (msg, userAndPosition) => {
       getUserList(userAndPosition);
@@ -97,7 +120,6 @@ const CollabText = () => {
   };
 
   const getUserList = (userAndPosition) => {
-    // setUserAndPositionState(userAndPosition);
     const userListLocal = userAndPosition.map((item) => {
       return item.name;
     });
@@ -112,11 +134,12 @@ const CollabText = () => {
             Keyboard.dismiss();
           }}>
           <Text style={styles.label}>
-            {connectionStatus.isConnected == false ? 'OFFLINE' : 'Connected'}
+            {connectionStatus.isInternetReachable == false
+              ? 'OFFLINE'
+              : 'Connected'}
           </Text>
           <Text style={styles.label}>Your name:</Text>
           <TextInput
-            onBlur={Keyboard.dismiss()}
             style={styles.input}
             onChangeText={(name) => {
               setUserName(name);
@@ -137,15 +160,11 @@ const CollabText = () => {
           multiline={true}
           returnKeyType={'done'}
           onBlur={(e) => {
-            console.log('RAW TEXT', e.nativeEvent.text);
-            Keyboard.dismiss();
             const cleanedUpText = cleanUpStringBeforeSubmitting(
               e.nativeEvent.text
             );
             setLocalText(cleanedUpText);
             setSimplified(!simplified);
-            console.log('LOCAL CLEANDUP', localText);
-            // handleTextChange();
           }}
           onSelectionChange={({ nativeEvent: { selection } }) => {
             setCursorPosition({ selection });
@@ -173,11 +192,6 @@ const styles = StyleSheet.create({
     height: 250,
     fontSize: 16,
     paddingHorizontal: 10,
-  },
-  userCursor: {
-    fontWeight: 'bold',
-    color: 'purple',
-    backgroundColor: '#dddddd',
   },
   label: {
     marginTop: 20,

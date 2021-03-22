@@ -3,20 +3,35 @@ import React from 'react';
 import * as Network from 'expo-network';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const receiveUpdatedMessageAndUpdateState = (msg, userAndPosition) => {
-  const storeData = async (value) => {
-    try {
-      await AsyncStorage.setItem('msg', msg);
-      await AsyncStorage.setItem('userAndPosition', userAndPosition);
-      console.log('Data saved locally');
-    } catch (e) {
-      console.log('Error saving the data locally');
-      console.log(e);
-    }
-  };
+export const receiveUpdatedMessageAndUpdateState = async (
+  msg,
+  userAndPosition
+) => {
+  try {
+    await AsyncStorage.setItem('msg', msg);
+    await AsyncStorage.setItem(
+      'userAndPosition',
+      JSON.stringify(userAndPosition)
+    );
+    console.log('Data saved locally');
+  } catch (e) {
+    console.log('Error saving the data locally');
+    console.log(e);
+  }
 };
 
-export const emitLocallySavedUpdate = () => {};
+export const retrieveLocallySavedUpdate = async () => {
+  try {
+    const msg = await AsyncStorage.getItem('msg');
+    const userAndPosition = await AsyncStorage.getItem('userAndPosition');
+    if (value !== null) {
+      return msg, userAndPosition;
+    }
+  } catch (e) {
+    console.log('Error reading value', e);
+    // error reading value
+  }
+};
 
 /*
 The function below takes the full message and position and returns it into JSX with the
