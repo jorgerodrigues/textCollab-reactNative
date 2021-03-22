@@ -144,16 +144,6 @@ const CollabText = () => {
             onChangeText={(name) => {
               setUserName(name);
             }}></TextInput>
-          <Text style={styles.label}>Users online:</Text>
-          <View>
-            {userList != undefined ? (
-              userList.map((userName, index) => {
-                return <Text key={index}>{userName}</Text>;
-              })
-            ) : (
-              <Text></Text>
-            )}
-          </View>
         </View>
         <TextInput
           style={styles.inputBox}
