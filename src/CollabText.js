@@ -10,89 +10,113 @@ import {
 } from 'react-native';
 import io from 'socket.io-client';
 import { BACKEND_PROD, DEV } from './config/env';
+import {
+  cleanUpStringBeforeSubmitting,
+  modifyStringAndAddCursors,
+  checkPhoneConnectivity,
+  receiveUpdatedMessageAndUpdateState,
+} from './Utils/textPreparationSupportFunctions';
 
 const CollabText = () => {
   const socket = io(BACKEND_PROD);
-
   const [fullText, setFullText] = useState();
-  const [localText, setLocalText] = useState();
+  const [localText, setLocalText] = useState('');
   const [cursorPosition, setCursorPosition] = useState(0);
   const [userName, setUserName] = useState();
   const [userList, setUserList] = useState();
+  const [simplified, setSimplified] = useState(false);
+  const [newText, setNewText] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState({
+    isConnected: true,
+    isInternetReachable: true,
+    type: 'WIFI',
+  });
   const id = useRef(`${Date.now()}`);
 
+  // This useEffect triggers the process of listening for an update from the server
   useEffect(() => {
-    receiveUpdatedTextInfo();
+    try {
+      receiveUpdatedTextInfo();
+    } catch {
+      receiveUpdatedMessageAndUpdateState(localText, {
+        name: userName,
+        position: cursorPosition.selection.end,
+      });
+    }
   }, []);
 
-  const handleTextChange = (text) => {
-    setLocalText(text);
-    console.log('TEXT FIELD: ', localText);
-    if (localText !== fullText) {
-      setFullText(localText);
-      // console.log('Sending message: ', fullText);
-      socket.emit('messageUpdated', {
-        user: userName,
-        msg: text,
-        idRemote: id.current,
-        cursorPosition: cursorPosition.selection.end,
-      });
+  // This useEffect is responsible for emitting an update after the text is cleaned up
+  useEffect(() => {
+    handleTextChange();
+  }, [simplified]);
+
+  // This useEffect is responsible for checking the connection status
+  useEffect(() => {
+    (async function checkNetwork() {
+      const phoneStatus = await checkPhoneConnectivity();
+      console.log(phoneStatus);
+      setConnectionStatus(phoneStatus);
+    })();
+  }, []);
+
+  const handleTextChange = () => {
+    if (localText !== fullText && cursorPosition.selection !== undefined) {
+      try {
+        socket.emit('messageUpdated', {
+          user: userName,
+          msg: localText,
+          idRemote: id.current,
+          cursorPosition: cursorPosition.selection.end,
+        });
+        setFullText(localText);
+      } catch (e) {
+        receiveUpdatedMessageAndUpdateState(localText, {
+          name: userName,
+          position: cursorPosition.selection.end,
+        });
+      }
     }
   };
 
   const receiveUpdatedTextInfo = () => {
     socket.on('textUpdated', (msg, userAndPosition) => {
       getUserList(userAndPosition);
-      sliceTextBasedOnUserPosition(msg.msg, userAndPosition);
       if (id.current !== msg.idRemote) {
+        setNewText('');
+        const conciliatedText = modifyStringAndAddCursors(
+          msg.msg,
+          userAndPosition
+        );
         setLocalText(msg.msg);
+        setFullText(msg.msg);
+        setNewText(conciliatedText);
       } else {
-        console.log('Same editor');
+        console.log('Same device');
       }
     });
   };
 
   const getUserList = (userAndPosition) => {
+    // setUserAndPositionState(userAndPosition);
     const userListLocal = userAndPosition.map((item) => {
       return item.name;
     });
     setUserList(userListLocal);
   };
 
-  const comparePositionToOrder = (a, b) => {
-    return a.position > b.position ? 1 : -1;
-  };
-
-  const sliceTextBasedOnUserPosition = (fullMessage, userAndPosition) => {
-    /* This function takes the conciliated text, split it into different text parts according to the user's position
-    in order to place the user cursor properly in the TextInput.
-    */
-    const newSortedArray = userAndPosition.sort(comparePositionToOrder);
-    var slicedText = [];
-    if (fullMessage != undefined) {
-      newSortedArray.forEach((item, index) => {
-        if (index == 0) {
-          slicedText.push(fullMessage.slice(0, newSortedArray[index].position));
-        } else {
-          slicedText.push(
-            fullMessage.slice(newSortedArray[index - 1].position),
-            newSortedArray[index - 1].position
-          );
-        }
-      });
-    }
-    return slicedText;
-  };
-
   return (
-    <ScrollView>
-      <KeyboardAvoidingView style={styles.view} behavior={'position'}>
+    <KeyboardAvoidingView style={styles.view} behavior={'position'}>
+      <ScrollView>
         <View
           onPress={() => {
             Keyboard.dismiss();
           }}>
+          <Text style={styles.label}>
+            {connectionStatus.isConnected == false ? 'OFFLINE' : 'Connected'}
+          </Text>
           <Text style={styles.label}>Your name:</Text>
           <TextInput
+            onBlur={Keyboard.dismiss()}
             style={styles.input}
             onChangeText={(name) => {
               setUserName(name);
@@ -100,8 +124,8 @@ const CollabText = () => {
           <Text style={styles.label}>Users online:</Text>
           <View>
             {userList != undefined ? (
-              userList.map((userName) => {
-                return <Text>{userName}</Text>;
+              userList.map((userName, index) => {
+                return <Text key={index}>{userName}</Text>;
               })
             ) : (
               <Text></Text>
@@ -111,18 +135,28 @@ const CollabText = () => {
         <TextInput
           style={styles.inputBox}
           multiline={true}
-          onChangeText={(text) => {
-            handleTextChange(text);
+          returnKeyType={'done'}
+          onBlur={(e) => {
+            console.log('RAW TEXT', e.nativeEvent.text);
+            Keyboard.dismiss();
+            const cleanedUpText = cleanUpStringBeforeSubmitting(
+              e.nativeEvent.text
+            );
+            setLocalText(cleanedUpText);
+            setSimplified(!simplified);
+            console.log('LOCAL CLEANDUP', localText);
+            // handleTextChange();
           }}
           onSelectionChange={({ nativeEvent: { selection } }) => {
             setCursorPosition({ selection });
           }}
-          onEndEditing={() => {
-            Keyboard.dismiss();
-          }}
-          value={localText}></TextInput>
-      </KeyboardAvoidingView>
-    </ScrollView>
+          onChangeText={(text) => {
+            setLocalText(text);
+          }}>
+          <Text>{newText}</Text>
+        </TextInput>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 

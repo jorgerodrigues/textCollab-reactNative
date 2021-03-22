@@ -1,26 +1,54 @@
-/* This function takes the conciliated text, split it into different text parts according to the user's position
-in order to place the user cursor properly in the TextInput.
-*/
-export const sliceTextBasedOnUserPosition = (fullMessage, userAndPosition) => {
-  const newSortedArray = userAndPosition.sort(comparePositionToOrder);
-  var slicedText = [];
-  if (fullMessage != undefined) {
-    newSortedArray.forEach((item, index) => {
-      if (index == 0) {
-        slicedText.push(fullMessage.slice(0, newSortedArray[index].position));
-      } else {
-        slicedText.push(
-          fullMessage.slice(newSortedArray[index - 1].position),
-          newSortedArray[index - 1].position
-        );
-      }
-    });
-  }
-  return slicedText;
+import { Text } from 'react-native';
+import React from 'react';
+import * as Network from 'expo-network';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const receiveUpdatedMessageAndUpdateState = (msg, userAndPosition) => {
+  const storeData = async (value) => {
+    try {
+      await AsyncStorage.setItem('msg', msg);
+      await AsyncStorage.setItem('userAndPosition', userAndPosition);
+      console.log('Data saved locally');
+    } catch (e) {
+      console.log('Error saving the data locally');
+      console.log(e);
+    }
+  };
 };
+
+export const emitLocallySavedUpdate = () => {};
+
 /*
-This function is used in order to sort the array of positions based on the position.
+The function below takes the full message and position and returns it into JSX with the
+user tag on to show the position
 */
-export const comparePositionToOrder = (a, b) => {
-  return a.position > b.position ? 1 : -1;
+export const modifyStringAndAddCursors = (fullMessage, userAndPosition) => {
+  var newMessage = '';
+  newMessage = fullMessage;
+  var newJSX;
+  userAndPosition.forEach((item) => {
+    newJSX = (
+      <Text>
+        <Text>{newMessage.slice(0, item.position)}</Text>
+        <Text style={{ fontWeight: 'bold' }}>{` | ${item.name} | `}</Text>
+        <Text>{newMessage.slice(item.position)}</Text>
+      </Text>
+    );
+  });
+
+  return newJSX;
+};
+
+/*
+The function below cleans up the previous user tags before submiting
+*/
+export const cleanUpStringBeforeSubmitting = (string) => {
+  const re = /\|(.*?)\|/gi;
+  const newString = string.replaceAll(re, '');
+  return newString;
+};
+
+export const checkPhoneConnectivity = async () => {
+  const networkStatus = await Network.getNetworkStateAsync();
+  return networkStatus;
 };
