@@ -24,7 +24,7 @@ const CollabText = () => {
   const [localText, setLocalText] = useState(''); // holds the latest local text.
   const [cursorPosition, setCursorPosition] = useState(0);
   const [userName, setUserName] = useState();
-  const [userList, setUserList] = useState();
+  const [userList, setUserList] = useState(); // holds the current info of the users connected to the app
   const [simplified, setSimplified] = useState(false);
   const [newText, setNewText] = useState('');
   const [connectionStatus, setConnectionStatus] = useState({
@@ -67,6 +67,7 @@ const CollabText = () => {
       const localData = await retrieveLocallySavedUpdate();
       console.log(localData);
     })();
+
     try {
       socket.emit('messageUpdated', {
         user: localData,

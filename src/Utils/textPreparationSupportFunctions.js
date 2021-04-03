@@ -38,9 +38,9 @@ The function below takes the full message and position and returns it into JSX w
 user tag on to show the position
 */
 export const modifyStringAndAddCursors = (fullMessage, userAndPosition) => {
-  var newMessage = '';
+  let newMessage = '';
   newMessage = fullMessage;
-  var newJSX;
+  let newJSX;
   userAndPosition.forEach((item) => {
     newJSX = (
       <Text>
